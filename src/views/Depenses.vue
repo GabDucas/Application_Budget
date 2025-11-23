@@ -22,9 +22,9 @@
         <div class="col-span-3">
           <label class="block mb-1">Montant ($)</label>
           <input
-            type="number"
-            min="0"
-            step="0.01"
+            type="text"
+            inputmode="decimal"
+            pattern="^\d*\.?\d{0,2}$"
             class="w-full rounded-lg px-3 py-2 bg-gray-800 border border-gray-700 text-gray-200 focus:ring focus:ring-blue-500"
             v-model.number="nouvelle.montant"
             required
@@ -33,35 +33,52 @@
 
         <!-- Type -->
         <div class="col-span-3">
-          <label class="block mb-1">Type</label>
-          <select
-            class="w-full rounded-lg px-3 py-2 bg-gray-800 border border-gray-700 text-gray-200 focus:ring focus:ring-blue-500"
-            v-model="nouvelle.type"
-            required
-          >
-            <option disabled value="">Type...</option>
-            <option>Ponctuel</option>
-            <option>Hebdomadaire</option>
-            <option>Mensuel</option>
-            <option>Annuel</option>
-          </select>
+          <label class="block mb-1 text-sm">Type</label>
+          <div class="flex flex-wrap gap-2">
+            <label
+              v-for="t in types"
+              :key="t"
+              class="cursor-pointer px-2 py-1 rounded-lg border border-gray-700 hover:bg-gray-700 text-sm"
+              :class="{
+                'bg-blue-600 text-white': nouvelle.type === t,
+                'text-gray-200': nouvelle.type !== t,
+              }"
+            >
+              <input type="radio" :value="t" v-model="nouvelle.type" class="hidden" />
+              {{ t }}
+            </label>
+          </div>
         </div>
 
-        <!-- Dépense / revenu -->
+        <!-- Nature -->
         <div class="col-span-2">
-          <label class="block mb-1">Nature</label>
-          <select
-            class="w-full rounded-lg px-3 py-2 bg-gray-800 border border-gray-700 text-gray-200 focus:ring focus:ring-blue-500"
-            v-model="nouvelle.nature"
-            required
-          >
-            <option>Dépense</option>
-            <option>Revenu</option>
-          </select>
+          <label class="block mb-1 text-sm">Nature</label>
+          <div class="flex flex-wrap gap-2">
+            <label
+              v-for="n in natures"
+              :key="n"
+              class="cursor-pointer px-2 py-1 rounded-lg border border-gray-700 hover:bg-gray-700 text-sm"
+              :class="{
+                'bg-blue-600 text-white': nouvelle.nature === n,
+                'text-gray-200': nouvelle.nature !== n,
+              }"
+            >
+              <input type="radio" :value="n" v-model="nouvelle.nature" class="hidden" />
+              {{ n }}
+            </label>
+          </div>
         </div>
 
-        <!-- Ajouter -->
-        <div class="col-span-12 flex justify-end">
+        <!-- Ajouter + Date sur la même ligne -->
+        <div class="col-span-12 flex items-end gap-2">
+          <div v-if="nouvelle.type === 'Ponctuel' && nouvelle.nature === 'Dépense'">
+            <input
+              type="date"
+              v-model="nouvelle.date"
+              class="rounded-lg px-3 py-2 bg-gray-800 border border-gray-700 text-gray-200 focus:ring focus:ring-blue-500"
+            />
+          </div>
+
           <button
             @click="ajouter"
             class="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold transition"
@@ -117,6 +134,21 @@
         >
           Export PDF
         </button>
+
+        <input
+          type="file"
+          ref="fichierInput"
+          accept=".csv,.json"
+          class="hidden"
+          @change="importerFichier"
+        />
+
+        <button
+          @click="fichierInput.click()"
+          class="px-6 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition"
+        >
+          Importer CSV/JSON
+        </button>
       </div>
     </div>
   </div>
@@ -125,6 +157,10 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import jsPDF from 'jspdf'
+import { useFinancesStore } from '@/stores/finances'
+
+const store = useFinancesStore()
+const fichierInput = ref(null)
 
 const categories = [
   'Alimentation',
@@ -136,56 +172,54 @@ const categories = [
   'Épargne',
   'Loisirs',
   'Autres',
+  'Services',
+  'Assurances',
+  'Abonnements',
+  'Investissements',
 ]
+
+const types = ['Ponctuel', 'Hebdomadaire', 'Mensuel', 'Annuel']
+const natures = ['Dépense', 'Revenu']
 
 const nouvelle = reactive({
   categorie: '',
   montant: 0,
   type: '',
   nature: 'Dépense',
+  date: '', // Nouvelle propriété
 })
-
-const depenses = ref([])
-const revenus = ref([])
 
 onMounted(() => {
-  depenses.value = JSON.parse(localStorage.getItem('depenses') || '[]')
-  revenus.value = JSON.parse(localStorage.getItem('revenus') || '[]')
+  store.chargerDepuisLocalStorage()
 })
 
-const toutes = computed(() => [...depenses.value, ...revenus.value])
+const toutes = computed(() => store.toutes)
 
 function ajouter() {
   if (!nouvelle.categorie || nouvelle.montant <= 0 || !nouvelle.type) return
+  // Si ponctuel et dépense, on ajoute la date
+  if (nouvelle.type === 'Ponctuel' && nouvelle.nature === 'Dépense' && !nouvelle.date) {
+    nouvelle.date = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
+  }
 
-  const item = { ...nouvelle }
+  store.ajouter({ ...nouvelle })
 
-  if (item.nature === 'Dépense') depenses.value.push(item)
-  else revenus.value.push(item)
-
-  localStorage.setItem('depenses', JSON.stringify(depenses.value))
-  localStorage.setItem('revenus', JSON.stringify(revenus.value))
-
+  // Reset
   nouvelle.categorie = ''
   nouvelle.montant = 0
   nouvelle.type = ''
+  nouvelle.nature = 'Dépense'
+  nouvelle.date = ''
 }
 
 function supprimer(index, nature) {
-  console.log('supprimer')
-  if (nature === 'Dépense') {
-    depenses.value.splice(index, 1)
-    localStorage.setItem('depenses', JSON.stringify(depenses.value))
-  } else {
-    revenus.value.splice(index - depenses.value.length, 1)
-    localStorage.setItem('revenus', JSON.stringify(revenus.value))
-  }
+  store.supprimer(index, nature)
 }
 
 function exportCSV() {
-  let contenu = 'Categorie,Montant,Type,Nature\n'
+  let contenu = 'Categorie,Montant,Type,Nature,Date\n'
   toutes.value.forEach((d) => {
-    contenu += `${d.categorie},${d.montant},${d.type},${d.nature}\n`
+    contenu += `${d.categorie},${d.montant},${d.type},${d.nature},${d.date || ''}\n`
   })
 
   const blob = new Blob([contenu], { type: 'text/csv' })
@@ -200,13 +234,35 @@ function exportCSV() {
 function exportPDF() {
   const pdf = new jsPDF()
   pdf.text('Résumé Financier', 10, 10)
-
   let y = 20
   toutes.value.forEach((d) => {
-    pdf.text(`${d.categorie} - ${d.montant.toFixed(2)}$ (${d.type}, ${d.nature})`, 10, y)
+    pdf.text(
+      `${d.categorie} - ${d.montant.toFixed(2)}$ (${d.type}, ${d.nature}${d.date ? ', ' + d.date : ''})`,
+      10,
+      y,
+    )
     y += 8
   })
-
   pdf.save('finances.pdf')
+}
+
+function importerFichier(event) {
+  const fichier = event.target.files?.[0]
+  if (!fichier) return
+
+  const reader = new FileReader()
+
+  reader.onload = () => {
+    const contenu = reader.result
+    if (fichier.name.endsWith('.json')) {
+      store.importerJSON(JSON.parse(contenu))
+    } else if (fichier.name.endsWith('.csv')) {
+      store.importerCSV(contenu)
+    } else {
+      alert('Format non supporté : utilisez .csv ou .json')
+    }
+  }
+
+  reader.readAsText(fichier)
 }
 </script>
