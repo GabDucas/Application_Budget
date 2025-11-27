@@ -17,6 +17,14 @@
         </router-link>
 
         <router-link
+          to="/budget"
+          class="hover:text-blue-300 transition"
+          :class="{ 'text-blue-400 font-semibold': $route.path === '/budget' }"
+        >
+          Budgets
+        </router-link>
+
+        <router-link
           to="/analyse"
           class="hover:text-blue-300 transition"
           :class="{ 'text-blue-400 font-semibold': $route.path === '/analyse' }"
@@ -40,6 +48,7 @@ function exporterJSON() {
   const data = {
     depenses: JSON.parse(localStorage.getItem('depenses') || '[]'),
     revenus: JSON.parse(localStorage.getItem('revenus') || '[]'),
+    budgets: JSON.parse(localStorage.getItem('budgets') || '{}'),
   }
 
   const blob = new Blob([JSON.stringify(data, null, 2)], {

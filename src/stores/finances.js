@@ -4,6 +4,7 @@ export const useFinancesStore = defineStore("finances", {
   state: () => ({
     depenses: [],
     revenus: [],
+    budgets: {}, // { categorie: montant }
   }),
 
   getters: {
@@ -14,11 +15,23 @@ export const useFinancesStore = defineStore("finances", {
     chargerDepuisLocalStorage() {
       this.depenses = JSON.parse(localStorage.getItem("depenses") || "[]");
       this.revenus = JSON.parse(localStorage.getItem("revenus") || "[]");
+      this.budgets = JSON.parse(localStorage.getItem("budgets") || "{}");
     },
 
     sauvegarder() {
       localStorage.setItem("depenses", JSON.stringify(this.depenses));
       localStorage.setItem("revenus", JSON.stringify(this.revenus));
+      localStorage.setItem("budgets", JSON.stringify(this.budgets));
+    },
+
+    definirBudget(categorie, montant) {
+      this.budgets[categorie] = montant;
+      this.sauvegarder();
+    },
+
+    supprimerBudget(categorie) {
+      delete this.budgets[categorie];
+      this.sauvegarder();
     },
 
     ajouter(item) {
@@ -38,6 +51,7 @@ export const useFinancesStore = defineStore("finances", {
     importerJSON(jsonData) {
       if (jsonData.depenses) this.depenses = jsonData.depenses;
       if (jsonData.revenus) this.revenus = jsonData.revenus;
+      if (jsonData.budgets) this.budgets = jsonData.budgets;
       this.sauvegarder();
     },
 

@@ -54,6 +54,12 @@
           <canvas ref="barChart" class="max-h-48"></canvas>
         </div>
 
+        <!-- Budget vs Dépenses réelles -->
+        <div class="bg-gray-800 p-3 rounded-lg shadow-md lg:col-span-2">
+          <h2 class="text-lg font-bold mb-2">Budget vs Dépenses réelles par catégorie</h2>
+          <canvas ref="budgetChart" class="max-h-56"></canvas>
+        </div>
+
         <!-- Évolution -->
         <div class="bg-gray-800 p-3 rounded-lg shadow-md lg:col-span-2">
           <h2 class="text-lg font-bold mb-2">Évolution des dépenses (12 derniers mois)</h2>
@@ -103,9 +109,12 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { Chart } from 'chart.js/auto'
+import { useFinancesStore } from '@/stores/finances'
 
+const store = useFinancesStore()
 const depenses = ref([])
 const revenus = ref([])
+const budgets = ref({})
 
 const zoom = ref(1)
 function zoomIn() {
@@ -116,11 +125,11 @@ function zoomOut() {
 }
 
 onMounted(() => {
-  const d = localStorage.getItem('depenses')
-  const r = localStorage.getItem('revenus')
+  store.chargerDepuisLocalStorage()
 
-  if (d) depenses.value = JSON.parse(d)
-  if (r) revenus.value = JSON.parse(r)
+  depenses.value = store.depenses
+  revenus.value = store.revenus
+  budgets.value = store.budgets
 
   renderCharts()
 })
@@ -200,18 +209,143 @@ const recommandations = computed(() => {
 /* ---------- GRAPHIQUES ---------- */
 const pieChart = ref(null)
 const barChart = ref(null)
+const budgetChart = ref(null)
 const lineChart = ref(null)
 
 function renderCharts() {
   const labels = Object.keys(categoriesStats.value)
   const values = Object.values(categoriesStats.value)
 
-  new Chart(pieChart.value, { type: 'doughnut', data: { labels, datasets: [{ data: values }] } })
+  // Doughnut Chart avec couleurs améliorées
+  new Chart(pieChart.value, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [
+        {
+          data: values,
+          backgroundColor: [
+            '#FF6384',
+            '#36A2EB',
+            '#FFCE56',
+            '#4BC0C0',
+            '#9966FF',
+            '#FF9F40',
+            '#FF6384',
+            '#C9CBCF',
+            '#4BC0C0',
+            '#FF6384',
+            '#36A2EB',
+            '#FFCE56',
+          ],
+          borderWidth: 2,
+          borderColor: '#1f2937',
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: true, position: 'bottom', labels: { color: '#d1d5db' } },
+        tooltip: {
+          callbacks: {
+            label: (context) => {
+              const label = context.label || ''
+              const value = context.parsed || 0
+              const total = context.dataset.data.reduce((a, b) => a + b, 0)
+              const percentage = ((value / total) * 100).toFixed(1)
+              return `${label}: ${value.toFixed(2)} $ (${percentage}%)`
+            },
+          },
+        },
+      },
+    },
+  })
+
+  // Bar Chart avec couleurs dynamiques
   new Chart(barChart.value, {
     type: 'bar',
     data: {
       labels: ['Revenus', 'Dépenses'],
-      datasets: [{ data: [revenusTotal.value, depensesTotal.value] }],
+      datasets: [
+        {
+          data: [revenusTotal.value, depensesTotal.value],
+          backgroundColor: ['rgba(75, 192, 192, 0.8)', 'rgba(255, 99, 132, 0.8)'],
+          borderColor: ['rgb(75, 192, 192)', 'rgb(255, 99, 132)'],
+          borderWidth: 2,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (context) => `${context.parsed.y.toFixed(2)} $`,
+          },
+        },
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { color: '#d1d5db' },
+          grid: { color: '#374151' },
+        },
+        x: { ticks: { color: '#d1d5db' }, grid: { display: false } },
+      },
+    },
+  })
+
+  // Budget vs Dépenses Chart (nouveau)
+  const categoriesAvecBudget = Object.keys(budgets.value)
+  const budgetData = categoriesAvecBudget.map((cat) => budgets.value[cat])
+  const depenseData = categoriesAvecBudget.map(
+    (cat) => categoriesStats.value[cat] || 0,
+  )
+
+  new Chart(budgetChart.value, {
+    type: 'bar',
+    data: {
+      labels: categoriesAvecBudget,
+      datasets: [
+        {
+          label: 'Budget',
+          data: budgetData,
+          backgroundColor: 'rgba(75, 192, 192, 0.6)',
+          borderColor: 'rgb(75, 192, 192)',
+          borderWidth: 2,
+        },
+        {
+          label: 'Dépenses réelles',
+          data: depenseData,
+          backgroundColor: 'rgba(255, 99, 132, 0.6)',
+          borderColor: 'rgb(255, 99, 132)',
+          borderWidth: 2,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: true, position: 'top', labels: { color: '#d1d5db' } },
+        tooltip: {
+          callbacks: {
+            label: (context) => {
+              const label = context.dataset.label || ''
+              return `${label}: ${context.parsed.y.toFixed(2)} $`
+            },
+          },
+        },
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { color: '#d1d5db' },
+          grid: { color: '#374151' },
+        },
+        x: { ticks: { color: '#d1d5db' }, grid: { display: false } },
+      },
     },
   })
 
@@ -278,20 +412,53 @@ function renderCharts() {
         {
           label: 'Dépenses',
           data: monthlyDepenses,
-          borderColor: 'rgb(255,99,132)',
-          backgroundColor: 'rgba(255,99,132,0.2)',
+          borderColor: 'rgb(255, 99, 132)',
+          backgroundColor: 'rgba(255, 99, 132, 0.2)',
           tension: 0.4,
+          borderWidth: 3,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          fill: true,
         },
         {
           label: 'Revenus',
           data: monthlyRevenus,
-          borderColor: 'rgb(75,192,192)',
-          backgroundColor: 'rgba(75,192,192,0.2)',
+          borderColor: 'rgb(75, 192, 192)',
+          backgroundColor: 'rgba(75, 192, 192, 0.2)',
           tension: 0.4,
+          borderWidth: 3,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          fill: true,
         },
       ],
     },
-    options: { scales: { y: { beginAtZero: true } } },
+    options: {
+      responsive: true,
+      interaction: {
+        mode: 'index',
+        intersect: false,
+      },
+      plugins: {
+        legend: { display: true, position: 'top', labels: { color: '#d1d5db' } },
+        tooltip: {
+          callbacks: {
+            label: (context) => {
+              const label = context.dataset.label || ''
+              return `${label}: ${context.parsed.y.toFixed(2)} $`
+            },
+          },
+        },
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { color: '#d1d5db' },
+          grid: { color: '#374151' },
+        },
+        x: { ticks: { color: '#d1d5db' }, grid: { color: '#374151' } },
+      },
+    },
   })
 }
 </script>

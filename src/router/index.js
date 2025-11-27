@@ -4,6 +4,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import DepensesPage from '../views/Depenses.vue'
 import AffichagesPage from '../views/Affichage.vue'
 import AnalysePage from '../views/Analyse.vue'
+import BudgetPage from '../views/Budget.vue'
 
 const routes = [
   {
@@ -24,6 +25,11 @@ const routes = [
     path: '/analyse',
     name: 'analyse',
     component: AnalysePage,
+  },
+  {
+    path: '/budget',
+    name: 'budget',
+    component: BudgetPage,
   },
 ]
 
